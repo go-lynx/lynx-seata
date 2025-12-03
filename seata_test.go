@@ -3,7 +3,7 @@ package seata
 import (
 	"testing"
 
-	"github.com/go-lynx/lynx/plugins/seata/conf"
+	"github.com/go-lynx/lynx-seata/conf"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -148,4 +148,3 @@ func TestPluginMetadata(t *testing.T) {
 	assert.Equal(t, "seata transaction server plugin for Lynx framework", pluginDescription)
 	assert.Equal(t, "lynx.seata", confPrefix)
 }
-
