@@ -45,14 +45,12 @@ func TestTxSeataClient_StartupTasks(t *testing.T) {
 	err := client.StartupTasks()
 	assert.NoError(t, err)
 
-	// Test with enabled Seata (will try to initialize, may fail without actual Seata server)
+	// Test with enabled Seata - use seatago.yml which exists in project root
 	client.conf.Enabled = true
-	// Note: This will call client.InitPath which may fail without actual config file
-	// We'll just verify it doesn't panic
+	client.conf.ConfigFilePath = "seatago.yml"
 	err = client.StartupTasks()
-	// Error is acceptable if config file doesn't exist
 	if err != nil {
-		t.Logf("StartupTasks returned error (expected if config file doesn't exist): %v", err)
+		t.Logf("StartupTasks returned error (may fail without Seata server): %v", err)
 	}
 }
 
@@ -145,6 +143,31 @@ func TestDefaultConfig(t *testing.T) {
 func TestPluginMetadata(t *testing.T) {
 	assert.Equal(t, "seata.server", pluginName)
 	assert.Equal(t, "v2.0.0", pluginVersion)
-	assert.Equal(t, "seata transaction server plugin for Lynx framework", pluginDescription)
+	assert.Equal(t, "Seata distributed transaction plugin for Lynx framework", pluginDescription)
 	assert.Equal(t, "lynx.seata", confPrefix)
+}
+
+// TestTxSeataClient_CheckHealth tests health check
+func TestTxSeataClient_CheckHealth(t *testing.T) {
+	client := NewTxSeataClient()
+
+	// When disabled, health check passes
+	err := client.CheckHealth()
+	assert.NoError(t, err)
+
+	// When enabled with valid config
+	client.conf = &conf.Seata{
+		Enabled:        true,
+		ConfigFilePath: "./conf/seata.yml",
+	}
+	err = client.CheckHealth()
+	assert.NoError(t, err)
+}
+
+// TestGetPlugin tests GetPlugin does not panic
+func TestGetPlugin(t *testing.T) {
+	// GetPlugin should not panic (returns nil when Lynx app not initialized)
+	assert.NotPanics(t, func() {
+		_ = GetPlugin()
+	})
 }

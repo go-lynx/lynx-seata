@@ -1,0 +1,12 @@
+# Lynx Seata 插件配置示例
+# 完整 Seata 客户端配置请使用 seatago.yml 或参考 seatago.yml
+
+lynx:
+  seata:
+    # 是否启用 Seata 分布式事务插件
+    enabled: true
+
+    # Seata 客户端配置文件路径
+    # 该文件遵循 seata-go 配置格式，可参考项目根目录的 seatago.yml
+    # 支持 file、nacos、apollo 等配置中心
+    config_file_path: "./conf/seata.yml"

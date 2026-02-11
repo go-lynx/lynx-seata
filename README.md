@@ -173,52 +173,33 @@ package main
 
 import (
     "context"
-    "github.com/go-lynx/lynx/plugins/dtx/seata"
-    "github.com/seata/seata-go/pkg/client"
+    "time"
+
+    seata "github.com/go-lynx/lynx-seata"
 )
 
 func main() {
-    // Get the Seata client instance
-    seataClient := seata.GetSeataClient()
-    
-    // Start a global transaction
+    // Get the Seata plugin instance (requires Lynx app to be initialized)
+    plugin := seata.GetPlugin()
+    if plugin == nil || !plugin.IsEnabled() {
+        // Seata is disabled or plugin not loaded
+        return
+    }
+
+    // Execute business logic within a global transaction
     ctx := context.Background()
-    tx, err := seataClient.Begin(ctx, "business-service")
-    if err != nil {
-        panic(err)
-    }
-    defer tx.Rollback()
-    
-    // Execute business logic
-    err = executeBusinessLogic(ctx, tx)
-    if err != nil {
-        return err
-    }
-    
-    // Commit the transaction
-    err = tx.Commit()
+    err := plugin.WithGlobalTx(ctx, "business-service", 60*time.Second, func(ctx context.Context) error {
+        // Your business logic here - use seata-go AT mode with DB operations
+        // or TCC/SAGA as needed. The ctx carries the XID for propagation.
+        return executeBusinessLogic(ctx)
+    })
     if err != nil {
         panic(err)
     }
 }
-```
 
-### AT Mode Usage
-
-```go
-// AT mode - Automatic compensation
-func executeBusinessLogic(ctx context.Context, tx *seata.Transaction) error {
-    // Business operations that will be automatically compensated
-    err := updateInventory(ctx, tx, "product-1", 10)
-    if err != nil {
-        return err
-    }
-    
-    err = updateOrder(ctx, tx, "order-123", "confirmed")
-    if err != nil {
-        return err
-    }
-    
+func executeBusinessLogic(ctx context.Context) error {
+    // Business operations - use Seata AT driver for DB or TCC/SAGA APIs
     return nil
 }
 ```
@@ -313,49 +294,17 @@ func executeXABusiness(ctx context.Context) error {
 
 ## API Reference
 
-### SeataClient
+### GetPlugin
 
-The main client interface providing access to all Seata functionality.
+Returns the Seata plugin instance from the Lynx application. Returns `nil` if the plugin is not loaded or Lynx is not initialized.
 
-#### Methods
+### TxSeataClient Methods
 
-- `GetSeataConfig() *conf.Seata` - Returns the current configuration
-- `Begin(ctx context.Context, xid string) (*Transaction, error)` - Begins a global transaction
-- `NewSaga(name string) *Saga` - Creates a new SAGA transaction
-- `NewXA(name string) *XA` - Creates a new XA transaction
+- `GetConfig() *conf.Seata` - Returns the current configuration
+- `GetConfigFilePath() string` - Returns the Seata config file path
 - `IsEnabled() bool` - Checks if Seata is enabled
-- `GetTransactionManager() *TransactionManager` - Gets the transaction manager
-
-### Transaction
-
-Represents a global transaction instance.
-
-#### Methods
-
-- `Commit() error` - Commits the transaction
-- `Rollback() error` - Rollbacks the transaction
-- `GetXID() string` - Gets the transaction XID
-- `IsActive() bool` - Checks if transaction is active
-- `AddBranch(branch *Branch) error` - Adds a branch transaction
-
-### Saga
-
-Represents a SAGA transaction instance.
-
-#### Methods
-
-- `AddStep(name string, action, compensation func(context.Context) error)` - Adds a saga step
-- `Execute(ctx context.Context) error` - Executes the saga
-- `Compensate(ctx context.Context) error` - Compensates the saga
-
-### XA
-
-Represents an XA transaction instance.
-
-#### Methods
-
-- `AddResource(name, url string) error` - Adds an XA resource
-- `Execute(ctx context.Context, business func(context.Context) error) error` - Executes XA transaction
+- `WithGlobalTx(ctx, name, timeout, business) error` - Executes business logic within a global transaction
+- `CheckHealth() error` - Performs health check
 
 ## Transaction Patterns
 
@@ -461,16 +410,13 @@ func sagaModeExample(ctx context.Context) error {
 ### Health Checks
 
 ```go
-// Check Seata client health
-err := seataClient.CheckHealth()
-if err != nil {
-    log.Printf("Seata health check failed: %v", err)
+plugin := seata.GetPlugin()
+if plugin != nil && plugin.IsEnabled() {
+    err := plugin.CheckHealth()
+    if err != nil {
+        log.Printf("Seata health check failed: %v", err)
+    }
 }
-
-// Get transaction statistics
-stats := seataClient.GetTransactionStats()
-log.Printf("Active transactions: %d, Committed: %d, Rolled back: %d",
-    stats.ActiveTransactions, stats.CommittedTransactions, stats.RolledBackTransactions)
 ```
 
 ### Prometheus Metrics
