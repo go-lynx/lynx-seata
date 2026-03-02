@@ -5,7 +5,7 @@ go 1.25
 toolchain go1.25.3
 
 require (
-	github.com/go-lynx/lynx v1.5.3
+	github.com/go-lynx/lynx v1.5.4
 	github.com/prometheus/client_golang v1.23.0
 	github.com/seata/seata-go v1.2.0
 	github.com/stretchr/testify v1.11.1
