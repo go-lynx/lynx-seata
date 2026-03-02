@@ -19,7 +19,7 @@ const (
 	pluginName = "seata.server"
 
 	// pluginVersion indicates the current version of the Seata plugin.
-	pluginVersion = "v2.0.0"
+	pluginVersion = "v1.5.4"
 
 	// pluginDescription briefly describes the functionality of the Seata plugin.
 	pluginDescription = "Seata distributed transaction plugin for Lynx framework"
