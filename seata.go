@@ -36,6 +36,7 @@ type TxSeataClient struct {
 	*plugins.BasePlugin
 	// Seata configuration information
 	conf *conf.Seata
+	rt   plugins.Runtime
 }
 
 // NewTxSeataClient creates a new Seata plugin instance.
@@ -52,8 +53,43 @@ func NewTxSeataClient() *TxSeataClient {
 	}
 }
 
+func (t *TxSeataClient) InitializeContext(ctx context.Context, plugin plugins.Plugin, rt plugins.Runtime) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context canceled before Seata initialize: %w", err)
+	}
+	return t.BasePlugin.Initialize(plugin, rt)
+}
+
+func (t *TxSeataClient) StartContext(ctx context.Context, _ plugins.Plugin) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context canceled before Seata startup: %w", err)
+	}
+	return t.StartupTasks()
+}
+
+func (t *TxSeataClient) StopContext(ctx context.Context, _ plugins.Plugin) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context canceled before Seata stop: %w", err)
+	}
+	return t.CleanupTasks()
+}
+
+func (t *TxSeataClient) IsContextAware() bool {
+	return true
+}
+
+func (t *TxSeataClient) PluginProtocol() plugins.PluginProtocol {
+	protocol := t.BasePlugin.PluginProtocol()
+	protocol.ContextLifecycle = true
+	return protocol
+}
+
 // InitializeResources loads and initializes the Seata plugin configuration.
 func (t *TxSeataClient) InitializeResources(rt plugins.Runtime) error {
+	if err := t.BasePlugin.InitializeResources(rt); err != nil {
+		return err
+	}
+	t.rt = rt
 	t.conf = &conf.Seata{}
 
 	err := rt.GetConfig().Value(confPrefix).Scan(t.conf)
@@ -74,6 +110,19 @@ func (t *TxSeataClient) StartupTasks() error {
 	log.Infof("Initializing seata")
 	if t.conf.GetEnabled() {
 		client.InitPath(t.conf.GetConfigFilePath())
+		if t.rt != nil {
+			if err := t.rt.RegisterSharedResource(pluginName, t); err != nil {
+				return fmt.Errorf("failed to register Seata shared resource: %w", err)
+			}
+			if err := t.rt.RegisterPrivateResource("config", t.conf); err != nil {
+				log.Warnf("failed to register Seata private config resource: %v", err)
+			}
+			if metrics := t.getMetrics(); metrics != nil {
+				if err := t.rt.RegisterPrivateResource("metrics", metrics); err != nil {
+					log.Warnf("failed to register Seata private metrics resource: %v", err)
+				}
+			}
+		}
 	} else {
 		log.Infof("Seata client is disabled")
 		return nil
