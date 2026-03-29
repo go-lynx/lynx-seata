@@ -142,7 +142,7 @@ func TestDefaultConfig(t *testing.T) {
 // TestPluginMetadata tests plugin metadata constants
 func TestPluginMetadata(t *testing.T) {
 	assert.Equal(t, "seata.server", pluginName)
-	assert.Equal(t, "v1.5.5", pluginVersion)
+	assert.Equal(t, "v1.6.0-beta", pluginVersion)
 	assert.Equal(t, "Seata distributed transaction plugin for Lynx framework", pluginDescription)
 	assert.Equal(t, "lynx.seata", confPrefix)
 }
