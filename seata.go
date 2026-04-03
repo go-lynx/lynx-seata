@@ -75,12 +75,12 @@ func (t *TxSeataClient) StopContext(ctx context.Context, _ plugins.Plugin) error
 }
 
 func (t *TxSeataClient) IsContextAware() bool {
-	return true
+	return false
 }
 
 func (t *TxSeataClient) PluginProtocol() plugins.PluginProtocol {
 	protocol := t.BasePlugin.PluginProtocol()
-	protocol.ContextLifecycle = true
+	protocol.ContextLifecycle = false
 	return protocol
 }
 
