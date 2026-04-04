@@ -14,10 +14,16 @@ func (t *TxSeataClient) CheckHealth() error {
 	}
 
 	if t.conf == nil {
+		if t.getMetrics() != nil {
+			t.getMetrics().RecordHealthCheck("error")
+		}
 		return fmt.Errorf("seata configuration is nil")
 	}
 
 	if t.conf.GetConfigFilePath() == "" {
+		if t.getMetrics() != nil {
+			t.getMetrics().RecordHealthCheck("error")
+		}
 		return fmt.Errorf("seata config file path is empty")
 	}
 

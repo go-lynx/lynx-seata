@@ -3,6 +3,8 @@ package seata
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/go-lynx/lynx"
@@ -29,6 +31,12 @@ const (
 
 	// defaultTransactionTimeout is the default global transaction timeout.
 	defaultTransactionTimeout = 60 * time.Second
+)
+
+var (
+	seataClientInitMu          sync.Mutex
+	seataClientInitPath        string
+	seataClientInitializedOnce bool
 )
 
 type TxSeataClient struct {
@@ -64,23 +72,23 @@ func (t *TxSeataClient) StartContext(ctx context.Context, _ plugins.Plugin) erro
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("context canceled before Seata startup: %w", err)
 	}
-	return t.StartupTasks()
+	return t.startupWithContext(ctx)
 }
 
 func (t *TxSeataClient) StopContext(ctx context.Context, _ plugins.Plugin) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("context canceled before Seata stop: %w", err)
 	}
-	return t.CleanupTasks()
+	return t.cleanupWithContext(ctx)
 }
 
 func (t *TxSeataClient) IsContextAware() bool {
-	return false
+	return true
 }
 
 func (t *TxSeataClient) PluginProtocol() plugins.PluginProtocol {
 	protocol := t.BasePlugin.PluginProtocol()
-	protocol.ContextLifecycle = false
+	protocol.ContextLifecycle = true
 	return protocol
 }
 
@@ -107,16 +115,31 @@ func (t *TxSeataClient) InitializeResources(rt plugins.Runtime) error {
 
 // StartupTasks initializes the Seata client when enabled.
 func (t *TxSeataClient) StartupTasks() error {
+	return t.startupWithContext(context.Background())
+}
+
+func (t *TxSeataClient) startupWithContext(ctx context.Context) error {
 	log.Infof("Initializing seata")
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context canceled before Seata startup: %w", err)
+	}
+	t.publishRuntimeContract(false, false)
+	if t.rt != nil {
+		if err := t.rt.RegisterSharedResource(pluginName, t); err != nil {
+			t.publishRuntimeContract(false, false)
+			return fmt.Errorf("failed to register Seata shared resource: %w", err)
+		}
+		t.registerRuntimePluginAlias()
+		if err := t.rt.RegisterPrivateResource("config", t.conf); err != nil {
+			log.Warnf("failed to register Seata private config resource: %v", err)
+		}
+	}
 	if t.conf.GetEnabled() {
-		client.InitPath(t.conf.GetConfigFilePath())
+		if err := initSeataClient(t.conf.GetConfigFilePath()); err != nil {
+			t.publishRuntimeContract(false, false)
+			return err
+		}
 		if t.rt != nil {
-			if err := t.rt.RegisterSharedResource(pluginName, t); err != nil {
-				return fmt.Errorf("failed to register Seata shared resource: %w", err)
-			}
-			if err := t.rt.RegisterPrivateResource("config", t.conf); err != nil {
-				log.Warnf("failed to register Seata private config resource: %v", err)
-			}
 			if metrics := t.getMetrics(); metrics != nil {
 				if err := t.rt.RegisterPrivateResource("metrics", metrics); err != nil {
 					log.Warnf("failed to register Seata private metrics resource: %v", err)
@@ -125,15 +148,64 @@ func (t *TxSeataClient) StartupTasks() error {
 		}
 	} else {
 		log.Infof("Seata client is disabled")
+		t.publishRuntimeContract(false, true)
 		return nil
 	}
+	if err := t.CheckHealth(); err != nil {
+		t.publishRuntimeContract(false, false)
+		return err
+	}
+	t.publishRuntimeContract(true, true)
 	log.Infof("Seata successfully initialized")
 	return nil
+}
+
+func initSeataClient(configFilePath string) (err error) {
+	normalizedPath := normalizeSeataConfigPath(configFilePath)
+
+	seataClientInitMu.Lock()
+	defer seataClientInitMu.Unlock()
+
+	if seataClientInitializedOnce {
+		if normalizedPath != "" && seataClientInitPath != "" && seataClientInitPath != normalizedPath {
+			return fmt.Errorf("seata client already initialized with config path %q; refusing to reinitialize with %q", seataClientInitPath, normalizedPath)
+		}
+		return nil
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("failed to initialize seata client with %q: %v", configFilePath, r)
+		}
+	}()
+
+	client.InitPath(configFilePath)
+	seataClientInitPath = normalizedPath
+	seataClientInitializedOnce = true
+	return nil
+}
+
+func normalizeSeataConfigPath(configFilePath string) string {
+	if configFilePath == "" {
+		return ""
+	}
+	if absPath, err := filepath.Abs(configFilePath); err == nil {
+		return filepath.Clean(absPath)
+	}
+	return filepath.Clean(configFilePath)
 }
 
 // CleanupTasks performs cleanup during plugin shutdown.
 // Seata-go does not expose a public shutdown API; connections will be released when the process exits.
 func (t *TxSeataClient) CleanupTasks() error {
+	return t.cleanupWithContext(context.Background())
+}
+
+func (t *TxSeataClient) cleanupWithContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context canceled before Seata cleanup: %w", err)
+	}
+	t.publishRuntimeContract(false, false)
 	if t.conf.GetEnabled() {
 		log.Infof("Seata client shutting down")
 	}

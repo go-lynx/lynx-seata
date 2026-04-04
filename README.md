@@ -57,4 +57,5 @@ func createOrder(ctx context.Context) error {
 
 - Keep all real Seata topology and client settings in the external file pointed to by `config_file_path`.
 - `WithGlobalTx(...)` is the intended API for business-level transaction boundaries.
+- `client.InitPath(...)` is now guarded as a process-wide one-time initialization. Repeated startup with the same config path is allowed; switching to a different config path in the same process returns an explicit error.
 - `CheckHealth()` only validates that the plugin is enabled and the path is non-empty. It is not a full connectivity probe for the Seata control plane.

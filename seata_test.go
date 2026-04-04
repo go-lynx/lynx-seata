@@ -54,6 +54,41 @@ func TestTxSeataClient_StartupTasks(t *testing.T) {
 	}
 }
 
+func TestTxSeataClient_StartupTasks_EnabledIsProcessSafe(t *testing.T) {
+	first := NewTxSeataClient()
+	first.conf = &conf.Seata{
+		Enabled:        true,
+		ConfigFilePath: "seatago.yml",
+	}
+	assert.NoError(t, first.StartupTasks())
+
+	second := NewTxSeataClient()
+	second.conf = &conf.Seata{
+		Enabled:        true,
+		ConfigFilePath: "seatago.yml",
+	}
+	assert.NoError(t, second.StartupTasks())
+}
+
+func TestTxSeataClient_StartupTasks_RejectsConflictingConfigPath(t *testing.T) {
+	first := NewTxSeataClient()
+	first.conf = &conf.Seata{
+		Enabled:        true,
+		ConfigFilePath: "seatago.yml",
+	}
+	assert.NoError(t, first.StartupTasks())
+
+	second := NewTxSeataClient()
+	second.conf = &conf.Seata{
+		Enabled:        true,
+		ConfigFilePath: "./conf/other-seatago.yml",
+	}
+	err := second.StartupTasks()
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "already initialized with config path")
+	}
+}
+
 // TestTxSeataClient_CleanupTasks tests cleanup
 func TestTxSeataClient_CleanupTasks(t *testing.T) {
 	client := NewTxSeataClient()
