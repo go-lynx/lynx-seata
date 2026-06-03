@@ -1,3 +1,8 @@
+// Package seata provides a Seata distributed-transaction plugin for the go-lynx
+// framework. It wraps seata-go and exposes global transaction management via
+// TxSeataClient, supporting AT/TCC/SAGA/XA modes as configured in the Seata
+// configuration file. The plugin integrates with the lynx runtime contract,
+// Prometheus metrics, and context-aware lifecycle hooks.
 package seata
 
 import (
