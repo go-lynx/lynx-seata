@@ -39,10 +39,9 @@ var (
 	seataClientInitializedOnce bool
 )
 
+// TxSeataClient is the Lynx plugin that manages the Seata distributed transaction client.
 type TxSeataClient struct {
-	// Embed base plugin, inherit common properties and methods of the plugin
 	*plugins.BasePlugin
-	// Seata configuration information
 	conf *conf.Seata
 	rt   plugins.Runtime
 }
